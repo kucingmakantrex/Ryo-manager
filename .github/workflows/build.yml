@@ -56,7 +56,7 @@ jobs:
                   android:label="Ryo Manager"
                   android:icon="@mipmap/ic_launcher"
                   android:roundIcon="@mipmap/ic_launcher"
-                  android:theme="@android:style/Theme.DeviceDefault">
+                  android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -73,14 +73,18 @@ jobs:
           import android.animation.ValueAnimator
           import android.app.Activity
           import android.app.ActivityManager
-          import android.app.AlertDialog
+          import android.app.Dialog
           import android.content.Context
+          import android.content.res.ColorStateList
           import android.graphics.Canvas
           import android.graphics.Color
           import android.graphics.Paint
           import android.graphics.Path
           import android.graphics.Typeface
+          import android.graphics.drawable.ColorDrawable
           import android.graphics.drawable.GradientDrawable
+          import android.graphics.drawable.RippleDrawable
+          import android.os.Build
           import android.os.Bundle
           import android.os.Environment
           import android.os.Handler
@@ -88,6 +92,7 @@ jobs:
           import android.os.StatFs
           import android.view.Gravity
           import android.view.View
+          import android.view.Window
           import android.view.animation.LinearInterpolator
           import android.widget.ImageView
           import android.widget.LinearLayout
@@ -99,24 +104,23 @@ jobs:
           import kotlin.math.max
           import kotlin.math.sin
 
-          /** Progress bar bergelombang (bagian terisi) + garis lurus (sisa), mirip Material 3 wavy. */
-          class WaveBar(ctx: Context) : View(ctx) {
+          /** Progress bar: bagian terisi bergelombang, sisanya garis lurus. */
+          class WaveBar(ctx: Context, accent: Int, track: Int) : View(ctx) {
               var progress = 0f
                   set(v) { field = v.coerceIn(0f, 1f); invalidate() }
 
               private var phase = 0f
               private val d = ctx.resources.displayMetrics.density
-              private val green = Color.parseColor("#7EE8A0")
 
               private val wavePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                   style = Paint.Style.STROKE; strokeWidth = 4 * d
-                  strokeCap = Paint.Cap.ROUND; color = green
+                  strokeCap = Paint.Cap.ROUND; color = accent
               }
               private val trackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                   style = Paint.Style.STROKE; strokeWidth = 4 * d
-                  strokeCap = Paint.Cap.ROUND; color = Color.parseColor("#3C463E")
+                  strokeCap = Paint.Cap.ROUND; color = track
               }
-              private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = green }
+              private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent }
               private val path = Path()
 
               private val animator = ValueAnimator.ofFloat(0f, (2 * PI).toFloat()).apply {
@@ -157,11 +161,40 @@ jobs:
               }
           }
 
+          /** Radio button custom untuk dialog pilihan. */
+          class RadioDot(ctx: Context, private val checked: Boolean, private val accent: Int, private val muted: Int) : View(ctx) {
+              private val d = ctx.resources.displayMetrics.density
+              private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 2 * d }
+              private val dot = Paint(Paint.ANTI_ALIAS_FLAG)
+
+              override fun onDraw(c: Canvas) {
+                  val cx = width / 2f
+                  val cy = height / 2f
+                  ring.color = if (checked) accent else muted
+                  c.drawCircle(cx, cy, 10 * d, ring)
+                  if (checked) { dot.color = accent; c.drawCircle(cx, cy, 5 * d, dot) }
+              }
+          }
+
           class MainActivity : Activity() {
 
               private val base = "/sys/devices/system/cpu/cpufreq"
-              private val green = Color.parseColor("#7EE8A0")
-              private val bg = Color.parseColor("#0F1511")
+
+              // Palet biru tua
+              private val bg = Color.parseColor("#0A0F1E")
+              private val cardC = Color.parseColor("#121A30")
+              private val sheet = Color.parseColor("#17213A")
+              private val accent = Color.parseColor("#4169E1")
+              private val accentSoft = Color.parseColor("#8FA8FF")
+              private val accentBg = Color.parseColor("#264169E1")
+              private val white = Color.parseColor("#F2F4FA")
+              private val muted = Color.parseColor("#8A94B0")
+              private val divider = Color.parseColor("#1F2943")
+              private val track = Color.parseColor("#27335A")
+              private val medium: Typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+
+              private val MATCH = LinearLayout.LayoutParams.MATCH_PARENT
+              private val WRAP = LinearLayout.LayoutParams.WRAP_CONTENT
 
               private lateinit var root: LinearLayout
               private lateinit var cpuBox: LinearLayout
@@ -169,7 +202,6 @@ jobs:
               private class ResCard(val bar: WaveBar, val pct: TextView, val detail: TextView)
               private lateinit var ramCard: ResCard
               private lateinit var internalCard: ResCard
-              private lateinit var sharedCard: ResCard
 
               private val handler = Handler(Looper.getMainLooper())
               private val ticker = object : Runnable {
@@ -189,28 +221,24 @@ jobs:
 
                   root = LinearLayout(this).apply {
                       orientation = LinearLayout.VERTICAL
-                      setPadding(dp(16), dp(24), dp(16), dp(32))
+                      setPadding(dp(20), dp(28), dp(20), dp(36))
                   }
                   setContentView(ScrollView(this).apply {
                       setBackgroundColor(bg)
                       addView(root)
                   })
 
-                  root.addView(label("Ryo Manager", 28f, Color.WHITE).apply {
-                      typeface = Typeface.DEFAULT_BOLD
-                      setPadding(dp(4), 0, 0, dp(8))
-                  })
+                  root.addView(label("Ryo Manager", 32f, white).apply { typeface = medium })
+                  val device = "${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${Build.MODEL}"
+                  root.addView(label(device, 14f, muted).apply { setPadding(0, dp(2), 0, dp(8)) })
 
                   // ----- Sumber daya -----
-                  root.addView(section("Sumber daya", R.drawable.ic_storage))
+                  root.addView(sectionLabel("SUMBER DAYA"))
                   ramCard = addCard("RAM", R.drawable.ic_memory)
                   internalCard = addCard("Internal", R.drawable.ic_storage)
-                  sharedCard = addCard("Penyimpanan bersama internal", R.drawable.ic_storage)
 
                   // ----- CPU -----
-                  root.addView(section("Frekuensi CPU", R.drawable.ic_memory).apply {
-                      setPadding(dp(4), dp(36), 0, 0)
-                  })
+                  root.addView(sectionLabel("FREKUENSI CPU"))
                   cpuBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
                   root.addView(cpuBox)
 
@@ -221,53 +249,56 @@ jobs:
               override fun onResume() { super.onResume(); handler.post(ticker) }
               override fun onPause() { handler.removeCallbacks(ticker); super.onPause() }
 
-              // ---------- Sumber daya ----------
-              private fun section(title: String, icon: Int): View =
-                  LinearLayout(this).apply {
-                      gravity = Gravity.CENTER_VERTICAL
-                      setPadding(dp(4), dp(12), 0, 0)
-                      addView(ImageView(context).apply {
-                          setImageResource(icon); setColorFilter(green)
-                          layoutParams = LinearLayout.LayoutParams(dp(28), dp(28))
-                      })
-                      addView(label(title, 20f, green).apply {
-                          typeface = Typeface.DEFAULT_BOLD
-                          setPadding(dp(12), 0, 0, 0)
-                      })
-                  }
+              // ---------- Helper UI ----------
+              private fun lp(w: Int, h: Int, weight: Float = 0f) = LinearLayout.LayoutParams(w, h, weight)
 
+              private fun rounded(color: Int, radiusDp: Int) = GradientDrawable().apply {
+                  setColor(color); cornerRadius = dp(radiusDp).toFloat()
+              }
+
+              private fun ripple() = RippleDrawable(
+                  ColorStateList.valueOf(Color.parseColor("#22FFFFFF")), null, ColorDrawable(Color.WHITE)
+              )
+
+              private fun label(t: String, size: Float, color: Int) = TextView(this).apply {
+                  text = t; textSize = size; setTextColor(color)
+              }
+
+              private fun sectionLabel(t: String): View = label(t, 12f, accentSoft).apply {
+                  typeface = medium
+                  letterSpacing = 0.12f
+                  setPadding(dp(4), dp(28), 0, 0)
+              }
+
+              private fun badge(icon: Int): View = ImageView(this).apply {
+                  setImageResource(icon)
+                  setColorFilter(accentSoft)
+                  setPadding(dp(9), dp(9), dp(9), dp(9))
+                  background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(accentBg) }
+                  layoutParams = lp(dp(40), dp(40))
+              }
+
+              // ---------- Sumber daya ----------
               private fun addCard(title: String, icon: Int): ResCard {
                   val card = LinearLayout(this).apply {
                       orientation = LinearLayout.VERTICAL
                       setPadding(dp(18), dp(16), dp(18), dp(16))
-                      background = GradientDrawable().apply {
-                          setColor(Color.parseColor("#1D1B20")); cornerRadius = dp(24).toFloat()
-                      }
-                      layoutParams = LinearLayout.LayoutParams(
-                          LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-                      ).apply { topMargin = dp(12) }
+                      background = rounded(cardC, 26)
+                      layoutParams = lp(MATCH, WRAP).apply { topMargin = dp(12) }
                   }
                   val head = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-                  head.addView(ImageView(this).apply {
-                      setImageResource(icon); setColorFilter(green)
-                      layoutParams = LinearLayout.LayoutParams(dp(28), dp(28))
+                  head.addView(badge(icon))
+                  head.addView(label(title, 19f, white).apply {
+                      typeface = medium
+                      layoutParams = lp(0, WRAP, 1f).apply { leftMargin = dp(12); rightMargin = dp(8) }
                   })
-                  head.addView(label(title, 20f, Color.WHITE).apply {
-                      typeface = Typeface.DEFAULT_BOLD
-                      layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                          .apply { leftMargin = dp(12); rightMargin = dp(8) }
-                  })
-                  val pct = label("0%", 20f, green)
+                  val pct = label("0%", 20f, accentSoft).apply { typeface = medium }
                   head.addView(pct)
 
-                  val bar = WaveBar(this).apply {
-                      layoutParams = LinearLayout.LayoutParams(
-                          LinearLayout.LayoutParams.MATCH_PARENT, dp(18)
-                      ).apply { topMargin = dp(10) }
+                  val bar = WaveBar(this, accent, track).apply {
+                      layoutParams = lp(MATCH, dp(18)).apply { topMargin = dp(12) }
                   }
-                  val detail = label("", 14f, Color.parseColor("#C9C5CA")).apply {
-                      setPadding(0, dp(6), 0, 0)
-                  }
+                  val detail = label("", 13f, muted).apply { setPadding(0, dp(6), 0, 0) }
                   card.addView(head); card.addView(bar); card.addView(detail)
                   root.addView(card)
                   return ResCard(bar, pct, detail)
@@ -284,21 +315,13 @@ jobs:
               }
 
               private fun updateResources() {
-                  // RAM
                   val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
                   val mi = ActivityManager.MemoryInfo()
                   am.getMemoryInfo(mi)
                   setCard(ramCard, mi.totalMem - mi.availMem, mi.availMem, mi.totalMem, ::fmtMb)
 
-                  // Penyimpanan internal (/data)
                   stat(Environment.getDataDirectory().path)?.let { (u, f, t) ->
                       setCard(internalCard, u, f, t, ::fmtGb)
-                  }
-                  // Penyimpanan bersama internal (/sdcard)
-                  @Suppress("DEPRECATION")
-                  val sharedPath = Environment.getExternalStorageDirectory().path
-                  stat(sharedPath)?.let { (u, f, t) ->
-                      setCard(sharedCard, u, f, t, ::fmtGb)
                   }
               }
 
@@ -357,7 +380,9 @@ jobs:
               private fun renderCpu(list: List<Policy>) {
                   cpuBox.removeAllViews()
                   if (list.isEmpty()) {
-                      cpuBox.addView(label("Tidak ada data cpufreq / akses root ditolak.", 16f, Color.WHITE))
+                      cpuBox.addView(label("Tidak ada data cpufreq / akses root ditolak.", 15f, muted).apply {
+                          setPadding(dp(4), dp(12), 0, 0)
+                      })
                       return
                   }
                   list.forEachIndexed { i, p ->
@@ -367,57 +392,108 @@ jobs:
                           i == list.lastIndex -> "Big cluster"
                           else -> "Middle cluster"
                       }
-                      cpuBox.addView(label("$name  (core ${p.cores})", 18f, green).apply {
-                          setPadding(0, dp(20), 0, dp(4))
+                      val card = LinearLayout(this).apply {
+                          orientation = LinearLayout.VERTICAL
+                          setPadding(dp(18), dp(16), dp(18), dp(6))
+                          background = rounded(cardC, 26)
+                          layoutParams = lp(MATCH, WRAP).apply { topMargin = dp(12) }
+                      }
+                      val head = LinearLayout(this).apply {
+                          gravity = Gravity.CENTER_VERTICAL
+                          setPadding(0, 0, 0, dp(6))
+                      }
+                      head.addView(badge(R.drawable.ic_memory))
+                      val col = LinearLayout(this).apply {
+                          orientation = LinearLayout.VERTICAL
+                          layoutParams = lp(0, WRAP, 1f).apply { leftMargin = dp(12) }
+                      }
+                      col.addView(label(name, 18f, white).apply { typeface = medium })
+                      col.addView(label("Core ${p.cores}", 13f, muted))
+                      head.addView(col)
+                      card.addView(head)
+
+                      card.addView(divider())
+                      card.addView(settingRow("Minimum frequency", "${p.min / 1000} MHz") {
+                          choose("Minimum CPU frequency", p.freqs.map { "${it / 1000} MHz" },
+                              p.freqs.indexOf(p.min)) { setMin(p, p.freqs[it]) }
                       })
-                      cpuBox.addView(row("Minimum CPU frequency", "${p.min / 1000} MHz") {
-                          pickFreq("Minimum CPU frequency", p, p.min) { setMin(p, it) }
+                      card.addView(divider())
+                      card.addView(settingRow("Maximum frequency", "${p.max / 1000} MHz") {
+                          choose("Maximum CPU frequency", p.freqs.map { "${it / 1000} MHz" },
+                              p.freqs.indexOf(p.max)) { setMax(p, p.freqs[it]) }
                       })
-                      cpuBox.addView(row("Maximum CPU frequency", "${p.max / 1000} MHz") {
-                          pickFreq("Maximum CPU frequency", p, p.max) { setMax(p, it) }
+                      card.addView(divider())
+                      card.addView(settingRow("Governor", p.gov) {
+                          choose("Governor", p.govs, p.govs.indexOf(p.gov)) {
+                              apply("chmod 644 $base/policy${p.id}/scaling_governor; " +
+                                    "echo ${p.govs[it]} > $base/policy${p.id}/scaling_governor")
+                          }
                       })
-                      cpuBox.addView(row("Governor", p.gov) { pickGov(p) })
+                      cpuBox.addView(card)
                   }
               }
 
-              private fun label(t: String, size: Float, color: Int) = TextView(this).apply {
-                  text = t; textSize = size; setTextColor(color)
+              private fun divider(): View = View(this).apply {
+                  setBackgroundColor(divider)
+                  layoutParams = lp(MATCH, 1)
               }
 
-              private fun row(title: String, value: String, onClick: () -> Unit): View =
+              private fun settingRow(title: String, value: String, onClick: () -> Unit): View =
                   LinearLayout(this).apply {
-                      orientation = LinearLayout.VERTICAL
-                      setPadding(0, dp(12), 0, dp(12))
                       gravity = Gravity.CENTER_VERTICAL
-                      addView(label(title, 16f, Color.WHITE))
-                      addView(label(value, 14f, Color.parseColor("#9E9E9E")))
+                      setPadding(0, dp(14), 0, dp(14))
+                      background = ripple()
+                      addView(label(title, 15f, white).apply { layoutParams = lp(0, WRAP, 1f) })
+                      addView(label("$value  ›", 15f, accentSoft).apply { typeface = medium })
                       setOnClickListener { onClick() }
                   }
 
-              private fun pickFreq(title: String, p: Policy, current: Long, onPick: (Long) -> Unit) {
-                  if (p.freqs.isEmpty()) {
-                      Toast.makeText(this, "Daftar frekuensi tidak tersedia", Toast.LENGTH_SHORT).show()
+              // ---------- Dialog pilihan ----------
+              private fun choose(title: String, items: List<String>, checked: Int, onPick: (Int) -> Unit) {
+                  if (items.isEmpty()) {
+                      Toast.makeText(this, "Daftar pilihan tidak tersedia", Toast.LENGTH_SHORT).show()
                       return
                   }
-                  val labels = p.freqs.map { "${it / 1000} MHz" }.toTypedArray()
-                  AlertDialog.Builder(this)
-                      .setTitle(title)
-                      .setSingleChoiceItems(labels, p.freqs.indexOf(current)) { d, which ->
-                          onPick(p.freqs[which]); d.dismiss()
-                      }
-                      .show()
+                  val dlg = Dialog(this)
+                  dlg.requestWindowFeature(Window.FEATURE_NO_TITLE)
+
+                  val box = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      background = rounded(sheet, 28)
+                      setPadding(dp(8), dp(22), dp(8), dp(12))
+                  }
+                  box.addView(label(title, 20f, white).apply {
+                      typeface = medium
+                      setPadding(dp(16), 0, dp(16), dp(12))
+                  })
+
+                  val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                  items.forEachIndexed { i, t ->
+                      val sel = i == checked
+                      list.addView(LinearLayout(this).apply {
+                          gravity = Gravity.CENTER_VERTICAL
+                          setPadding(dp(16), dp(14), dp(16), dp(14))
+                          background = if (sel) rounded(accentBg, 16) else ripple()
+                          addView(RadioDot(context, sel, accent, muted).apply { layoutParams = lp(dp(24), dp(24)) })
+                          addView(label(t, 17f, if (sel) white else Color.parseColor("#C7CDE0")).apply {
+                              setPadding(dp(16), 0, 0, 0)
+                          })
+                          setOnClickListener { onPick(i); dlg.dismiss() }
+                      })
+                  }
+                  val sv = ScrollView(this).apply { addView(list) }
+                  box.addView(sv)
+                  sv.post { sv.scrollTo(0, list.getChildAt(maxOf(checked - 2, 0))?.top ?: 0) }
+
+                  dlg.setContentView(box)
+                  dlg.window?.let { w ->
+                      w.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+                      w.setLayout((resources.displayMetrics.widthPixels * 0.9).toInt(), WRAP)
+                  }
+                  dlg.show()
               }
 
-              private fun pickGov(p: Policy) {
-                  AlertDialog.Builder(this)
-                      .setTitle("Governor")
-                      .setSingleChoiceItems(p.govs.toTypedArray(), p.govs.indexOf(p.gov)) { d, which ->
-                          apply("chmod 644 $base/policy${p.id}/scaling_governor; echo ${p.govs[which]} > $base/policy${p.id}/scaling_governor")
-                          d.dismiss()
-                      }
-                      .show()
-              }
-
+              // ---------- Apply ----------
               private fun setMin(p: Policy, f: Long) {
                   val d = "$base/policy${p.id}"
                   val pre = if (f > p.max) "echo $f > $d/scaling_max_freq; " else ""
